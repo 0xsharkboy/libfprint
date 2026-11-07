@@ -121,6 +121,7 @@ driver_sources = {
     'vfs0050' : files('drivers/vfs0050.c'),
     'elan' : files('drivers/elan.c'),
     'elanmoc' : files('drivers/elanmoc/elanmoc.c'),
+    'elanmoc2' : files('drivers/elanmoc2/elanmoc2.c'),
     'elanspi' : files('drivers/elanspi.c'),
     'nb1010' : files('drivers/nb1010.c'),
     'virtual_image' : files('drivers/virtual-image.c'),
