@@ -502,7 +502,8 @@ elanmoc2_identify_verify_report (FpDevice *device, FpPrint *print,
             }
           fp_info ("Identify: no match");
         }
-      fpi_device_identify_report (device, NULL, print, *error);
+      fpi_device_identify_report (device, NULL, print,
+                                  g_steal_pointer (error));
       return TRUE;
     }
   else
@@ -525,7 +526,9 @@ elanmoc2_identify_verify_report (FpDevice *device, FpPrint *print,
               print = NULL;
             }
         }
-      fpi_device_verify_report (device, result, print, *error);
+      if (*error != NULL)
+        result = FPI_MATCH_ERROR;
+      fpi_device_verify_report (device, result, print, g_steal_pointer (error));
       return result != FPI_MATCH_FAIL;
     }
 }
@@ -608,8 +611,11 @@ elanmoc2_identify_run_state (FpiSsm *ssm, FpDevice *device)
             fp_info ("Identify failed: %s", error->message);
             if (can_retry)
               {
+                /* Report the retry error and end the operation: fprintd
+                 * starts a fresh one for the next attempt. */
                 elanmoc2_identify_verify_report (device, NULL, &error);
-                fpi_ssm_jump_to_state (ssm, IDENTIFY_IDENTIFY);
+                elanmoc2_identify_verify_complete (device, NULL);
+                fpi_ssm_mark_completed (g_steal_pointer (&self->ssm));
               }
             else
               {
