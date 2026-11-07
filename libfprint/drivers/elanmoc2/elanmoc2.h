@@ -193,3 +193,9 @@ enum ClearStorageStates {
   CLEAR_STORAGE_CHECK_NUM_ENROLLED,
   CLEAR_STORAGE_NUM_STATES
 };
+
+enum DeleteStates {
+  DELETE_SEND,
+  DELETE_CHECK,
+  DELETE_NUM_STATES
+};

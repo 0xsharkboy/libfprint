@@ -23,10 +23,19 @@ assert device.has_feature(FPrint.DeviceFeature.VERIFY)
 assert device.has_feature(FPrint.DeviceFeature.DUPLICATES_CHECK)
 assert device.has_feature(FPrint.DeviceFeature.STORAGE)
 assert not device.has_feature(FPrint.DeviceFeature.STORAGE_LIST)
-assert not device.has_feature(FPrint.DeviceFeature.STORAGE_DELETE)
+assert device.has_feature(FPrint.DeviceFeature.STORAGE_DELETE)
 assert device.has_feature(FPrint.DeviceFeature.STORAGE_CLEAR)
 
 device.open_sync()
+
+# Exercise the delete vfunc without touching the replayed sensor.
+invalid_print = FPrint.Print.new(device)
+try:
+    device.delete_print_sync(invalid_print)
+except GLib.Error:
+    pass
+else:
+    raise AssertionError("invalid delete unexpectedly succeeded")
 device.clear_storage_sync()
 device.close_sync()
 

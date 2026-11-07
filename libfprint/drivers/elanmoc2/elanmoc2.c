@@ -1076,6 +1076,95 @@ elanmoc2_enroll (FpDevice *device)
 }
 
 static void
+elanmoc2_delete_run_state (FpiSsm *ssm, FpDevice *device)
+{
+  FpiDeviceElanMoC2 *self = FPI_DEVICE_ELANMOC2 (device);
+  g_autoptr(GError) error = NULL;
+  g_autoptr(GBytes) buffer_in = g_steal_pointer (&self->buffer_in);
+
+  switch (fpi_ssm_get_cur_state (ssm))
+    {
+    case DELETE_SEND: {
+        FpPrint *print = NULL;
+        g_autoptr(GVariant) data = NULL;
+        g_autoptr(GVariant) user_id_variant = NULL;
+        g_autoptr(GByteArray) buffer_out = NULL;
+        const guint8 *user_id = NULL;
+        gsize user_id_len = 0;
+        guint8 finger_id = 0;
+
+        fpi_device_get_delete_data (device, &print);
+        g_object_get (print, "fpi-data", &data, NULL);
+
+        if (data == NULL ||
+            !g_variant_check_format_string (data, "(y@ay)", FALSE))
+          {
+            error = fpi_device_error_new (FP_DEVICE_ERROR_DATA_INVALID);
+            fpi_device_delete_complete (device, g_steal_pointer (&error));
+            fpi_ssm_mark_completed (g_steal_pointer (&self->ssm));
+            break;
+          }
+
+        g_variant_get (data, "(y@ay)", &finger_id, &user_id_variant);
+        if (finger_id >= ELANMOC2_MAX_PRINTS)
+          {
+            error = fpi_device_error_new (FP_DEVICE_ERROR_DATA_INVALID);
+            fpi_device_delete_complete (device, g_steal_pointer (&error));
+            fpi_ssm_mark_completed (g_steal_pointer (&self->ssm));
+            break;
+          }
+
+        user_id = g_variant_get_fixed_array (user_id_variant, &user_id_len,
+                                             sizeof (guint8));
+        buffer_out = elanmoc2_prepare_cmd (self, &cmd_delete);
+        if (buffer_out == NULL)
+          {
+            error = fpi_device_error_new (FP_DEVICE_ERROR_NOT_SUPPORTED);
+            fpi_device_delete_complete (device, g_steal_pointer (&error));
+            fpi_ssm_mark_completed (g_steal_pointer (&self->ssm));
+            break;
+          }
+
+        buffer_out->data[3] = 0xf0 | (finger_id + 5);
+        memcpy (&buffer_out->data[4], user_id,
+                MIN (user_id_len, elanmoc2_get_user_id_max_length (self)));
+        elanmoc2_cmd_transceive (device, &cmd_delete, buffer_out);
+        break;
+      }
+
+    case DELETE_CHECK: {
+        const guint8 *data_in = NULL;
+
+        if (buffer_in == NULL || g_bytes_get_size (buffer_in) < 2)
+          error = fpi_device_error_new_msg (FP_DEVICE_ERROR_PROTO,
+                                            "Invalid delete response");
+        else
+          {
+            data_in = g_bytes_get_data (buffer_in, NULL);
+            if (data_in[1] != 0)
+              error = fpi_device_error_new_msg (FP_DEVICE_ERROR_GENERAL,
+                                                "Sensor rejected fingerprint deletion");
+          }
+
+        fpi_device_delete_complete (device, g_steal_pointer (&error));
+        fpi_ssm_mark_completed (g_steal_pointer (&self->ssm));
+        break;
+      }
+    }
+}
+
+static void
+elanmoc2_delete (FpDevice *device)
+{
+  FpiDeviceElanMoC2 *self = FPI_DEVICE_ELANMOC2 (device);
+
+  fp_info ("[elanmoc2] New delete operation");
+  self->ssm = fpi_ssm_new (device, elanmoc2_delete_run_state,
+                           DELETE_NUM_STATES);
+  fpi_ssm_start (self->ssm, elanmoc2_ssm_completed_callback);
+}
+
+static void
 elanmoc2_clear_storage_run_state (FpiSsm *ssm, FpDevice *device)
 {
   FpiDeviceElanMoC2 *self = FPI_DEVICE_ELANMOC2 (device);
@@ -1193,6 +1282,7 @@ fpi_device_elanmoc2_class_init (FpiDeviceElanMoC2Class *klass)
   dev_class->identify = elanmoc2_identify_verify;
   dev_class->verify = elanmoc2_identify_verify;
   dev_class->enroll = elanmoc2_enroll;
+  dev_class->delete = elanmoc2_delete;
   dev_class->clear_storage = elanmoc2_clear_storage;
   dev_class->cancel = elanmoc2_cancel;
 
