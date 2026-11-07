@@ -53,8 +53,13 @@ verify_res, verify_print = d.verify_sync(p)
 assert verify_res == True
 print("Verify done.")
 
-print("Delete is a no-op here")
-d.delete_print_sync(p)
+print("Delete is explicitly unsupported here")
+try:
+    d.delete_print_sync(p)
+except GLib.Error:
+    pass
+else:
+    raise AssertionError("delete unexpectedly succeeded")
 
 print('Identifying...')
 match, identify_print = d.identify_sync(stored, None, None, None)
